@@ -1,150 +1,84 @@
-import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
 
 import Screen from '@/components/Screen';
-import FormInput from '@/components/FormInput';
 import Button from '@/components/Button';
 import Message from '@/components/Message';
 import { useAuth } from '@/context/AuthContext';
-import { getAuthErrorMessage, getErrorCode } from '@/services/authErrors';
-import { confirm } from '@/utils/confirm';
+import { useTasks } from '@/hooks/useTasks';
+import type { TaskStatus } from '@/types/task';
+import { formatDate } from '@/utils/date';
 import { colors } from '@/theme';
 
-function formatDate(value: string | null | undefined): string {
-  if (!value) return '-';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString('pt-BR');
-}
-
-function InfoRow({ label, value }: { label: string; value?: string | null }) {
+function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
   return (
-    <View style={styles.row}>
-      <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={styles.rowValue}>{value || '-'}</Text>
+    <View style={[styles.stat, { borderLeftColor: color }]}>
+      <Text style={[styles.statValue, { color }]}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
 }
 
-export default function ProfileScreen() {
-  const { user, logout, deleteAccount } = useAuth();
-  const [feedback, setFeedback] = useState('');
-  const [loggingOut, setLoggingOut] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [needsPassword, setNeedsPassword] = useState(false);
-  const [password, setPassword] = useState('');
-  const [passwordError, setPasswordError] = useState('');
+export default function HomeScreen() {
+  const router = useRouter();
+  const { user } = useAuth();
+  const { tasks, loading, error, retry } = useTasks();
 
-  const initial = (user?.name || user?.email || '?').charAt(0).toUpperCase();
-
-  async function handleLogout() {
-    setFeedback('');
-    setLoggingOut(true);
-    try {
-      // O Stack.Protected leva o usuário de volta para o login após o logout.
-      await logout();
-    } catch (error) {
-      setFeedback(getAuthErrorMessage(error));
-      setLoggingOut(false);
-    }
-  }
-
-  async function runDelete(currentPassword?: string) {
-    setFeedback('');
-    setDeleting(true);
-    try {
-      await deleteAccount(currentPassword);
-    } catch (error) {
-      if (getErrorCode(error) === 'auth/requires-recent-login') {
-        setNeedsPassword(true);
-      }
-      setFeedback(getAuthErrorMessage(error));
-      setDeleting(false);
-    }
-  }
-
-  async function handleDelete() {
-    const confirmed = await confirm({
-      title: 'Excluir conta',
-      message: 'Tem certeza que deseja excluir sua conta? Essa ação não poderá ser desfeita.',
-      confirmText: 'Excluir',
-      destructive: true,
-    });
-    if (confirmed) runDelete();
-  }
-
-  function handleConfirmWithPassword() {
-    if (!password) {
-      setPasswordError('Informe sua senha.');
-      return;
-    }
-    setPasswordError('');
-    runDelete(password);
-  }
-
-  function cancelPasswordConfirmation() {
-    setNeedsPassword(false);
-    setPassword('');
-    setFeedback('');
-  }
+  const count = (status: TaskStatus) => tasks.filter((task) => task.status === status).length;
+  // As tarefas já chegam do Firestore ordenadas pela data de entrega.
+  const upcoming = tasks.filter((task) => task.status !== 'concluida').slice(0, 3);
 
   return (
-    <Screen>
-      <View style={styles.header}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{initial}</Text>
+    <Screen title={`Olá, ${user?.name || 'usuário'}!`} subtitle="Acompanhe e organize suas tarefas.">
+      <Text style={styles.section}>Resumo</Text>
+      {loading ? (
+        <ActivityIndicator color={colors.primary} style={styles.loading} />
+      ) : error ? (
+        <View>
+          <Message type="error" text={error} />
+          <Button title="Tentar novamente" variant="outline" onPress={retry} />
         </View>
-        <Text style={styles.name}>Olá, {user?.name || 'usuário'}!</Text>
-        <Text style={styles.email}>{user?.email}</Text>
-      </View>
+      ) : (
+        <>
+          <View style={styles.stats}>
+            <StatCard label="Total" value={tasks.length} color={colors.primary} />
+            <StatCard label="Pendentes" value={count('pendente')} color={colors.warning} />
+            <StatCard label="Em andamento" value={count('em_andamento')} color={colors.info} />
+            <StatCard label="Concluídas" value={count('concluida')} color={colors.success} />
+          </View>
 
-      <Text style={styles.section}>Informações da conta</Text>
-      <InfoRow label="Nome" value={user?.name} />
-      <InfoRow label="E-mail" value={user?.email} />
-      <InfoRow label="Conta criada em" value={formatDate(user?.createdAt)} />
-      <InfoRow label="Último login" value={formatDate(user?.lastLoginAt)} />
+          <Text style={styles.section}>Próximas entregas</Text>
+          {upcoming.length === 0 ? (
+            <Text style={styles.empty}>Nenhuma tarefa em aberto.</Text>
+          ) : (
+            upcoming.map((task) => (
+              <Pressable
+                key={task.id}
+                style={({ pressed }) => [styles.upcoming, pressed && styles.pressed]}
+                onPress={() => router.push({ pathname: '/tasks/[id]', params: { id: task.id } })}
+                accessibilityRole="button"
+                accessibilityLabel={`Editar ${task.title}`}
+              >
+                <Text style={styles.upcomingTitle} numberOfLines={1}>
+                  {task.title}
+                </Text>
+                <Text style={styles.upcomingDate}>{formatDate(task.dueDate)}</Text>
+              </Pressable>
+            ))
+          )}
+        </>
+      )}
 
       <View style={styles.actions}>
-        <Message type="error" text={feedback} />
-
-        {needsPassword ? (
-          <View>
-            <FormInput
-              label="Confirme sua senha para excluir a conta"
-              placeholder="Sua senha"
-              value={password}
-              onChangeText={setPassword}
-              error={passwordError}
-              secureTextEntry
-              autoCapitalize="none"
-            />
-            <Button title="Confirmar exclusão" variant="danger" onPress={handleConfirmWithPassword} loading={deleting} />
-            <Button title="Cancelar" variant="link" onPress={cancelPasswordConfirmation} />
-          </View>
-        ) : (
-          <>
-            <Button title="Sair da conta" variant="outline" onPress={handleLogout} loading={loggingOut} disabled={deleting} />
-            <Button title="Excluir conta" variant="danger" onPress={handleDelete} loading={deleting} disabled={loggingOut} />
-          </>
-        )}
+        <Button title="Nova tarefa" onPress={() => router.push('/tasks/new')} />
+        <Button title="Minhas tarefas" variant="outline" onPress={() => router.push('/tasks')} />
+        <Button title="Minha conta" variant="link" onPress={() => router.push('/profile')} />
       </View>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  header: { alignItems: 'center', marginBottom: 20 },
-  avatar: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  avatarText: { color: colors.white, fontSize: 30, fontWeight: '700' },
-  name: { fontSize: 22, fontWeight: '700', color: colors.text, textAlign: 'center' },
-  email: { fontSize: 15, color: colors.textMuted, marginTop: 2 },
   section: {
     fontSize: 13,
     fontWeight: '700',
@@ -152,16 +86,33 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 8,
+    marginTop: 4,
   },
-  row: {
+  loading: { marginVertical: 24 },
+  stats: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 16 },
+  stat: {
+    flexGrow: 1,
+    flexBasis: '45%',
+    backgroundColor: colors.background,
+    borderRadius: 10,
+    borderLeftWidth: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  statValue: { fontSize: 24, fontWeight: '700' },
+  statLabel: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
+  empty: { fontSize: 15, color: colors.textMuted, marginBottom: 8 },
+  upcoming: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     gap: 12,
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
-  rowLabel: { fontSize: 15, color: colors.textMuted },
-  rowValue: { fontSize: 15, color: colors.text, fontWeight: '500', flexShrink: 1, textAlign: 'right' },
-  actions: { marginTop: 24 },
+  pressed: { opacity: 0.6 },
+  upcomingTitle: { flex: 1, fontSize: 15, color: colors.text, fontWeight: '500' },
+  upcomingDate: { fontSize: 14, color: colors.textMuted },
+  actions: { marginTop: 20 },
 });
