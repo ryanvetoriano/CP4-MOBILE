@@ -6,12 +6,12 @@ type FormInputProps = TextInputProps & {
   error?: string;
 };
 
-export default function FormInput({ label, error, ...inputProps }: FormInputProps) {
+export default function FormInput({ label, error, style, ...inputProps }: FormInputProps) {
   return (
     <View style={styles.container}>
       <Text style={styles.label}>{label}</Text>
       <TextInput
-        style={[styles.input, error ? styles.inputError : null]}
+        style={[styles.input, inputProps.multiline && styles.multiline, error ? styles.inputError : null, style]}
         placeholderTextColor={colors.textMuted}
         accessibilityLabel={label}
         {...inputProps}
@@ -34,6 +34,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.text,
   },
+  multiline: { minHeight: 96, textAlignVertical: 'top' },
   inputError: { borderColor: colors.danger },
   error: { color: colors.danger, fontSize: 13, marginTop: 4 },
 });

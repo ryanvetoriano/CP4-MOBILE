@@ -10,6 +10,10 @@ export const colors = {
   dangerBg: '#FEE2E2',
   success: '#15803D',
   successBg: '#DCFCE7',
+  warning: '#B45309',
+  warningBg: '#FEF3C7',
+  info: '#1D4ED8',
+  infoBg: '#DBEAFE',
   white: '#FFFFFF',
 } as const;
 
