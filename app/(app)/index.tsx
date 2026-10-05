@@ -6,6 +6,7 @@ import Button from '@/components/Button';
 import Message from '@/components/Message';
 import { useAuth } from '@/context/AuthContext';
 import { useTasks } from '@/hooks/useTasks';
+import { OFFLINE_MESSAGE } from '@/services/firestoreErrors';
 import type { TaskStatus } from '@/types/task';
 import { formatDate } from '@/utils/date';
 import { colors } from '@/theme';
@@ -22,7 +23,7 @@ function StatCard({ label, value, color }: { label: string; value: number; color
 export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const { tasks, loading, error, retry } = useTasks();
+  const { tasks, loading, offline, error, retry } = useTasks();
 
   const count = (status: TaskStatus) => tasks.filter((task) => task.status === status).length;
   // As tarefas já chegam do Firestore ordenadas pela data de entrega.
@@ -40,6 +41,7 @@ export default function HomeScreen() {
         </View>
       ) : (
         <>
+          <Message type="error" text={offline ? OFFLINE_MESSAGE : ''} />
           <View style={styles.stats}>
             <StatCard label="Total" value={tasks.length} color={colors.primary} />
             <StatCard label="Pendentes" value={count('pendente')} color={colors.warning} />

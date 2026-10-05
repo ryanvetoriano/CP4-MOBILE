@@ -11,6 +11,7 @@ export function useTasks() {
   const { user } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
+  const [offline, setOffline] = useState(false);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
 
@@ -20,8 +21,10 @@ export function useTasks() {
     setError('');
 
     return subscribeToTasks(
-      (data) => {
+      (data, fromCache) => {
         setTasks(data);
+        // Sem conexão o Firestore entrega uma lista vazia; a tela avisa em vez de dizer que não há tarefas.
+        setOffline(fromCache);
         setError('');
         setLoading(false);
       },
@@ -34,5 +37,5 @@ export function useTasks() {
 
   const retry = useCallback(() => setAttempt((value) => value + 1), []);
 
-  return { tasks, loading, error, retry };
+  return { tasks, loading, offline, error, retry };
 }

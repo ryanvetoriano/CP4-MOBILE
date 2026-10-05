@@ -70,8 +70,9 @@ function toFirestore(input: TaskInput) {
 }
 
 // READ: escuta as tarefas do usuário em tempo real, ordenadas pela data de entrega.
+// fromCache = true indica que o Firestore está sem conexão com o servidor e só tem os dados em memória.
 export function subscribeToTasks(
-  onChange: (tasks: Task[]) => void,
+  onChange: (tasks: Task[], fromCache: boolean) => void,
   onError: (error: FirestoreError | Error) => void,
 ): Unsubscribe {
   let unsubscribe: Unsubscribe | undefined;
@@ -83,7 +84,13 @@ export function subscribeToTasks(
     if (cancelled) return;
     try {
       const tasksQuery = query(tasksCollection(currentUid()), orderBy('dataEntrega', 'asc'));
-      unsubscribe = onSnapshot(tasksQuery, (snapshot) => onChange(snapshot.docs.map(fromSnapshot)), onError);
+      // includeMetadataChanges avisa também quando a conexão volta, mesmo sem mudança nos dados.
+      unsubscribe = onSnapshot(
+        tasksQuery,
+        { includeMetadataChanges: true },
+        (snapshot) => onChange(snapshot.docs.map(fromSnapshot), snapshot.metadata.fromCache),
+        onError,
+      );
     } catch (error) {
       onError(error as Error);
     }

@@ -9,7 +9,7 @@ import OptionSelector, { type Option } from '@/components/OptionSelector';
 import TaskCard from '@/components/TaskCard';
 import { useToast } from '@/context/ToastContext';
 import { useTasks } from '@/hooks/useTasks';
-import { getFirestoreErrorMessage } from '@/services/firestoreErrors';
+import { getFirestoreErrorMessage, OFFLINE_MESSAGE } from '@/services/firestoreErrors';
 import { deleteTask } from '@/services/tasksService';
 import { STATUS_OPTIONS, type Task, type TaskStatus } from '@/types/task';
 import { confirm } from '@/utils/confirm';
@@ -21,7 +21,7 @@ const FILTER_OPTIONS: Option<Filter>[] = [{ value: 'todas', label: 'Todas' }, ..
 export default function TasksScreen() {
   const router = useRouter();
   const showToast = useToast();
-  const { tasks, loading, error, retry } = useTasks();
+  const { tasks, loading, offline, error, retry } = useTasks();
   const [filter, setFilter] = useState<Filter>('todas');
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -50,7 +50,8 @@ export default function TasksScreen() {
 
   function renderEmpty() {
     if (loading) return <ActivityIndicator size="large" color={colors.primary} style={styles.loading} />;
-    if (error) return null;
+    // Sem conexão a lista chega vazia: o aviso do cabeçalho explica, sem dizer que não há registros.
+    if (error || offline) return null;
     return (
       <View style={styles.empty}>
         <Text style={styles.emptyTitle}>Nenhum registro encontrado.</Text>
@@ -75,6 +76,7 @@ export default function TasksScreen() {
             <View style={styles.filter}>
               <OptionSelector options={FILTER_OPTIONS} value={filter} onChange={setFilter} />
             </View>
+            <Message type="error" text={offline && !error ? OFFLINE_MESSAGE : ''} />
             {error ? (
               <View>
                 <Message type="error" text={error} />

@@ -12,6 +12,9 @@ const MESSAGES: Record<string, string> = {
   'invalid-argument': 'Dados inválidos. Revise os campos e tente novamente.',
 };
 
+export const OFFLINE_MESSAGE =
+  'Sem conexão com o banco de dados. Verifique sua internet: as tarefas serão carregadas assim que a conexão voltar.';
+
 export function getFirestoreErrorMessage(error: unknown): string {
   const code = getErrorCode(error);
   return (code && MESSAGES[code]) || 'Não foi possível concluir a operação. Tente novamente.';
