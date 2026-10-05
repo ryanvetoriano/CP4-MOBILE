@@ -14,7 +14,22 @@ import {
 
 import { auth } from '../config/firebase';
 import { buildSession, clearSession, getSession, saveSession, type Session } from '../services/sessionStorage';
+import { deleteUserData, saveUserProfile } from '../services/userService';
 import type { LoginForm, RegisterForm } from '../utils/validation';
+
+// O Firebase só permite excluir a conta se o login for recente (cerca de 5 minutos).
+// Usamos uma margem menor para pedir a senha antes de apagar os dados do Firestore.
+const RECENT_LOGIN_MS = 4 * 60 * 1000;
+
+function signedInRecently(user: User): boolean {
+  const lastSignIn = Date.parse(user.metadata.lastSignInTime ?? '');
+  return Date.now() - lastSignIn < RECENT_LOGIN_MS;
+}
+
+// O documento usuarios/{uid} complementa o Auth; uma falha nele não impede o login.
+function syncUserProfile(user: User, isNewUser = false) {
+  saveUserProfile(user, isNewUser).catch((error) => console.warn('Não foi possível salvar o perfil no Firestore', error));
+}
 
 type AuthContextValue = {
   user: Session | null;
@@ -72,6 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async ({ name, email, password }: RegisterForm) => {
       const { user: created } = await createUserWithEmailAndPassword(auth, email.trim(), password);
       await updateProfile(created, { displayName: name.trim() });
+      syncUserProfile(created, true);
       await syncSession(created);
     },
     [syncSession],
@@ -80,6 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(
     async ({ email, password }: LoginForm) => {
       const { user: logged } = await signInWithEmailAndPassword(auth, email.trim(), password);
+      syncUserProfile(logged);
       await syncSession(logged);
     },
     [syncSession],
@@ -108,8 +125,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (password) {
       const credential = EmailAuthProvider.credential(current.email, password);
       await reauthenticateWithCredential(current, credential);
+    } else if (!signedInRecently(current)) {
+      // Pede a senha antes de apagar os dados, para não excluir as tarefas e o deleteUser falhar depois.
+      throw Object.assign(new Error('Login recente necessário'), { code: 'auth/requires-recent-login' });
     }
 
+    // Os dados do Firestore são apagados antes da conta, enquanto as regras ainda reconhecem o usuário.
+    await deleteUserData(current.uid);
     await deleteUser(current);
     await clearSession();
     setUser(null);
