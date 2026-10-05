@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { initializeAuth, getAuth, getReactNativePersistence, type Auth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, type Firestore } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // As credenciais são lidas do arquivo .env (veja .env.example).
@@ -27,4 +27,11 @@ function createAuth(): Auth {
 export const auth = createAuth();
 
 // Cloud Firestore: guarda os dados do usuário e as tarefas em usuarios/{uid}/tarefas.
-export const db = getFirestore(app);
+// No celular a conexão padrão (WebChannel com streaming) falha com frequência no React Native,
+// então usamos long polling, que é o modo recomendado nesse ambiente.
+function createFirestore(): Firestore {
+  if (!isFirstInit || Platform.OS === 'web') return getFirestore(app);
+  return initializeFirestore(app, { experimentalForceLongPolling: true });
+}
+
+export const db = createFirestore();
