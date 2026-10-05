@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { initializeAuth, getAuth, getReactNativePersistence, type Auth } from 'firebase/auth';
+import { getFirestore } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // As credenciais são lidas do arquivo .env (veja .env.example).
@@ -24,3 +25,6 @@ function createAuth(): Auth {
 }
 
 export const auth = createAuth();
+
+// Cloud Firestore: guarda os dados do usuário e as tarefas em usuarios/{uid}/tarefas.
+export const db = getFirestore(app);

@@ -1,0 +1,50 @@
+rules_version = '2';
+
+// Estrutura:
+//   usuarios/{uid}                     -> dados básicos do usuário (nome, e-mail, datas)
+//   usuarios/{uid}/tarefas/{tarefaId}  -> tarefas cadastradas pelo usuário
+//
+// Cada usuário autenticado só pode ler e alterar os documentos que estão sob o seu próprio uid.
+// Qualquer outro acesso (usuário não autenticado ou uid diferente) é negado.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    // Só esses campos são aceitos: a senha nunca é armazenada no Firestore.
+    function isValidUser() {
+      return request.resource.data.keys().hasOnly(['nome', 'email', 'criadoEm', 'ultimoLogin']);
+    }
+
+    function isValidTask(userId) {
+      let data = request.resource.data;
+      return data.keys().hasOnly([
+          'usuarioId', 'titulo', 'descricao', 'categoria', 'dataEntrega',
+          'prioridade', 'status', 'criadoEm', 'atualizadoEm'
+        ])
+        && data.usuarioId == userId
+        && data.titulo is string && data.titulo.size() > 0 && data.titulo.size() <= 80
+        && data.descricao is string && data.descricao.size() > 0 && data.descricao.size() <= 500
+        && data.categoria is string && data.categoria.size() > 0 && data.categoria.size() <= 40
+        && data.dataEntrega is timestamp
+        && data.prioridade in ['baixa', 'media', 'alta']
+        && data.status in ['pendente', 'em_andamento', 'concluida']
+        && data.atualizadoEm == request.time;
+    }
+
+    match /usuarios/{userId} {
+      allow read, delete: if isOwner(userId);
+      allow create, update: if isOwner(userId) && isValidUser();
+
+      match /tarefas/{taskId} {
+        allow read, delete: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidTask(userId)
+          && request.resource.data.criadoEm == request.time;
+        allow update: if isOwner(userId) && isValidTask(userId)
+          && request.resource.data.criadoEm == resource.data.criadoEm;
+      }
+    }
+  }
+}
